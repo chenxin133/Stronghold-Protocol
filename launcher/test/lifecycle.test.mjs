@@ -109,7 +109,7 @@ test('an active match keeps its game process until the idle check succeeds', { t
   const f = await fixture(t, { matches: 1 });
   await waitFor(() => f.output().includes('waiting for an idle server'), 'new release is pending');
   assert.equal(await f.game(), 'v1');
-  assert.equal((await f.status(1)).phase, 'waiting-for-match');
+  await waitFor(async () => (await f.status(1)).phase === 'waiting-for-match', 'pending state reaches the dashboard');
   await f.setIdle();
   await waitFor(async () => await f.game() === 'v2', 'idle retry activates update');
 });

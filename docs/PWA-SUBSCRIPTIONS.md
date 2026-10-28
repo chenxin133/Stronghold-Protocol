@@ -2,10 +2,12 @@
 
 本 fork 的部署入口是 `launcher/`。游戏沿用原项目已有的 PWA 清单、图标、横屏和客户端版本刷新机制，玩法未修改。
 
+启动器 **1.1.0 起包含 ConnectTool v1.6.0 官方 Windows 版**及它的 Qt/Steam 运行库，保存在 `connecttool/`；打包时核对官方 ZIP 的固定 SHA-256，再运行 QML 启动检查。ConnectTool 保持独立程序，保留原始许可文件，不会复制本机已有软件的日志、账号信息或个人配置。
+
 ## 使用方式
 
 1. 从本 fork 的 Releases 下载 `Stronghold-PWA-Server-<版本>-Windows-x64.zip`，解压到路径较短的位置。
-2. Windows 双击包内 `Start-PWA.cmd`。内置 Node.js，不需要 Git、npm、Android Studio 或 Apple 开发者账号。首次启动要联网下载原作者的精简包及缺少的素材，之后可以在无 GitHub 网络时启动已安装的版本。
+2. Windows 双击包内 `Start-Online.cmd`，选择 **1 开服** 或 **2 加入**，也可以分别使用 `Host-Game.cmd` / `Join-Game.cmd`。开服启动 ConnectTool 与游戏服务器，加入端启动 ConnectTool 并等待转发连通，之后自动打开游戏窗口。无需 Steam 联机时使用 `Start-PWA.cmd`。内置 Node.js，不需要 Git、npm、Android Studio 或 Apple 开发者账号。首次开服要联网下载原作者的精简包及缺少的素材，之后可以在无 GitHub 网络时启动已安装的版本。
 3. 电脑打开 `http://localhost:3000/`。控制台同时列出局域网地址，同 Wi-Fi 下的 iPad/Android 可用浏览器访问该地址；首次运行时如有 Windows 防火墙提示，按自己的网络范围允许访问。
 4. 给服务器配置**固定、可信的 HTTPS 地址**后，三端都使用它安装 PWA：Windows Edge/Chrome 的安装按钮；iPad Safari 的分享 → 添加到主屏幕；Android Chrome 的安装应用/添加到主屏幕。不同浏览器和 Android 系统提供的安装形式可能不同。
 5. 打开同一地址的 `/subscriptions/` 查看当前/最新版本、更新状态及各仓库 RSS/Atom 链接。页面不提供远程修改服务器配置的接口。
@@ -40,7 +42,8 @@ GitHub 临时无法连接或触发 API 限额时，继续运行已安装版本�
   "assetPublicDirectory": "",
   "subscriptions": [
     { "url": "https://github.com/sganggs/Stronghold-Protocol", "kind": "releases" },
-    { "url": "https://github.com/chenxin133/Stronghold-Protocol", "kind": "commits" }
+    { "url": "https://github.com/chenxin133/Stronghold-Protocol", "kind": "commits" },
+    { "url": "https://github.com/moeleak/connecttool-qt", "kind": "releases" }
   ]
 }
 ```
@@ -80,7 +83,10 @@ Caddy 需要能够完成该域名的证书验证，且三端都能访问这个�
 
 使用已有的 ConnectTool 时，游戏仍运行在主机 Windows 上，Steam 负责电脑之间的连接或中继，并非替你托管游戏。
 
-1. 房主先启动游戏，确认 `http://localhost:3000/healthz` 返回 `ok: true`。
+1.1.0 起，ConnectTool 已随整合包提供，无需另行安装。`Start-Online.cmd` 会启动包内的程序；房主还会启动本包的游戏服务器，若对应端口已有本游戏服务器则直接复用。加入者不启动第二个游戏服务器。Edge 可用时，连通后以应用窗口打开游戏；否则使用默认浏览器。
+Steam 登录、TCP 端口以及房间创建/加入需在 ConnectTool 自身窗口里完成。官方 v1.6.0 未提供这些房间操作的命令行参数，启动器不会冒充已经创建了房间。
+
+1. 两端先登录 Steam。房主双击 `Host-Game.cmd`，参与者双击 `Join-Game.cmd`，两端都会打开随包提供的 ConnectTool。
 2. 两台 Windows 都运行并登录 Steam，再打开 ConnectTool。选择 **TCP 转发**；房主将 **主机目标端口** 设置为 `3000`，房间 ID 留空，创建一个非公开房间。
 3. 为避免与房主自己的 3000 端口冲突，可把 ConnectTool 的 **本地监听端口** 设置为 `3001`。
 4. 将 ConnectTool 房间 ID 发给参与者。参与者在自己的 ConnectTool 输入房间 ID，选择 TCP 转发，本地监听端口同样设为 `3001`，然后加入。
@@ -100,6 +106,14 @@ node launcher/server.mjs
 ```
 
 首次通过 GitHub 制作便携包：Actions → **Build PWA server launcher** → Run workflow。工作流测试启动器、下载并校验固定版本的官方 Node.js，发布启动 ZIP 和 `.sha256` 校验文件到 `pwa-launcher-v<版本>`。该工作流只有手动触发，没有游戏更新定时构建。
+
+同一工作流也下载并校验 `launcher/connecttool.json` 固定的 ConnectTool 官方 ZIP，复制其完整发行目录、保留原有许可文件并补充 ConnectTool MIT 许可证，检查 Qt 界面可以加载后才发布。修改内置 ConnectTool 版本需同步更新版本、附件大小和 SHA-256，并发布新版启动器。游戏版本仍由运行中的订阅器更新，无需为每个游戏版本重打整合包。
+
+从源码使用联机入口，需要先生成整合包，或者明确指定自己已有的程序：
+
+```powershell
+node launcher/online.mjs --host --connecttool "D:/ConnectTool/connecttool-qt.exe"
+```
 
 本地验证/打包：
 

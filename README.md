@@ -60,7 +60,7 @@ English summary: [below](#english).
 
 ## 快速开始
 
-**本 fork 的 Windows/PWA 订阅启动器**：见 [安装与 GitHub 自动更新](docs/PWA-SUBSCRIPTIONS.md)。Windows 启动器可直接订阅原作者的正式发布；游戏更新无需重新运行 Actions 或重新安装客户端。
+**本 fork 的 Windows/PWA 联机整合包**：见 [安装、ConnectTool 联机与 GitHub 自动更新](docs/PWA-SUBSCRIPTIONS.md)。启动器 1.1.0 起内置 ConnectTool v1.6.0 及运行库，提供开服/加入入口；游戏更新无需重新运行 Actions 或重新安装客户端。
 
 ### 方式一：整合包（推荐）
 

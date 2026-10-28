@@ -6,6 +6,7 @@
   "assetPublicDirectory": "",
   "subscriptions": [
     { "url": "https://github.com/sganggs/Stronghold-Protocol", "kind": "releases" },
-    { "url": "https://github.com/chenxin133/Stronghold-Protocol", "kind": "commits" }
+    { "url": "https://github.com/chenxin133/Stronghold-Protocol", "kind": "commits" },
+    { "url": "https://github.com/moeleak/connecttool-qt", "kind": "releases" }
   ]
 }

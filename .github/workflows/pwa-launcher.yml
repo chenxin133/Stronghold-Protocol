@@ -28,7 +28,7 @@ jobs:
         run: npm ci --omit=dev --no-audit --no-fund
       - name: Verify subscription and update safeguards
         run: npm test
-      - name: Package the reusable Windows server launcher
+      - name: Package Windows launcher with ConnectTool and verify its QML startup
         run: node package.mjs
       - name: Upload package
         uses: actions/upload-artifact@v4
