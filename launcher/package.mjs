@@ -68,7 +68,7 @@ await fs.writeFile(path.join(stage, 'BUNDLE.json'), `${JSON.stringify({ launcher
 const zip = path.join(out, `Stronghold-PWA-Server-${version}-Windows-x64.zip`);
 console.log('Creating full Windows ZIP...');
 execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-  "$ErrorActionPreference = 'Stop'; Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::CreateFromDirectory($env:SP_PWA_STAGE, $env:SP_PWA_ZIP, [System.IO.Compression.CompressionLevel]::Fastest, $true)"],
+  "$ErrorActionPreference = 'Stop'; Add-Type -AssemblyName System.IO.Compression.FileSystem; [AppContext]::SetSwitch('Switch.System.IO.Compression.ZipFile.UseBackslash', $false); [System.IO.Compression.ZipFile]::CreateFromDirectory($env:SP_PWA_STAGE, $env:SP_PWA_ZIP, [System.IO.Compression.CompressionLevel]::Fastest, $true)"],
 { env: { ...process.env, SP_PWA_STAGE: stage, SP_PWA_ZIP: zip }, stdio: 'inherit', windowsHide: true });
 console.log('ZIP created; checking bundled runtime, game, image and ConnectTool entries...');
 // Verify the actual ZIP includes the dot-prefixed runtime, not just the staging directory.
