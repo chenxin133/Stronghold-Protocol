@@ -1,0 +1,11 @@
+{
+  "source": "https://github.com/sganggs/Stronghold-Protocol",
+  "port": 3000,
+  "host": "0.0.0.0",
+  "checkIntervalMinutes": 30,
+  "assetPublicDirectory": "",
+  "subscriptions": [
+    { "url": "https://github.com/sganggs/Stronghold-Protocol", "kind": "releases" },
+    { "url": "https://github.com/chenxin133/Stronghold-Protocol", "kind": "commits" }
+  ]
+}

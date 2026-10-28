@@ -1,0 +1,15 @@
+{
+  "name": "stronghold-pwa-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-or-later",
+  "description": "A release-subscribed PWA server for Windows, iPad and Android",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "package": "node package.mjs"
+  },
+  "dependencies": { "extract-zip": "2.0.1" }
+}

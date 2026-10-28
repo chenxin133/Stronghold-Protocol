@@ -60,6 +60,8 @@ English summary: [below](#english).
 
 ## 快速开始
 
+**本 fork 的 Windows/PWA 订阅启动器**：见 [安装与 GitHub 自动更新](docs/PWA-SUBSCRIPTIONS.md)。Windows 启动器可直接订阅原作者的正式发布；游戏更新无需重新运行 Actions 或重新安装客户端。
+
 ### 方式一：整合包（推荐）
 
 [Releases](../../releases/latest) 里有两种整合包，代码和运行依赖完全相同，二选一；已经装好 0.2.x 的，升级时只下载更新包即可：

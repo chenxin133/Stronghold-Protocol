@@ -1,0 +1,14 @@
+:root { color-scheme: dark; font: 16px/1.7 system-ui, sans-serif; background: #0c0f0e; color: #dae3dd; }
+body { margin: 0; padding: 36px 20px; }
+main { max-width: 860px; margin: auto; }
+.eyebrow { color: #90a79b; font-size: 12px; letter-spacing: .18em; }
+h1 { font-size: clamp(28px, 6vw, 42px); margin: 10px 0; }
+h2 { font-size: 19px; margin-top: 0; }
+a { color: #98ddba; overflow-wrap: anywhere; }
+.play { display: inline-block; padding: 10px 24px; border: 1px solid #5d9174; margin: 14px 0 22px; text-decoration: none; }
+section { border-top: 1px solid #2b3830; padding: 24px 0; }
+dl { display: grid; grid-template-columns: minmax(130px, 1fr) 2fr; gap: 10px; }
+dt { color: #9fafa5; } dd { margin: 0; overflow-wrap: anywhere; }
+#error { color: #f0b68b; }
+footer { border-top: 1px solid #2b3830; padding-top: 24px; color: #8a9b90; font-size: 12px; }
+@media (max-width: 480px) { dl { grid-template-columns: 1fr; gap: 4px; } dd { margin-bottom: 12px; } }

@@ -1,0 +1,54 @@
+name: Build PWA server launcher
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pwa-launcher
+  cancel-in-progress: false
+
+jobs:
+  windows-launcher:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: launcher
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: launcher/package-lock.json
+      - name: Install launcher dependencies
+        run: npm ci --omit=dev --no-audit --no-fund
+      - name: Verify subscription and update safeguards
+        run: npm test
+      - name: Package the reusable Windows server launcher
+        run: node package.mjs
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Stronghold-PWA-Server-Windows-x64
+          path: launcher/dist/*
+          if-no-files-found: error
+      - name: Publish launcher release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $tag = "pwa-launcher-v$version"
+          gh release view $tag --repo $env:GH_REPO *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --repo $env:GH_REPO --target $env:GITHUB_SHA --title "PWA server launcher $version" --notes-file ../docs/PWA-RELEASE-NOTES.md --latest=false
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          $files = Get-ChildItem dist -File | ForEach-Object FullName
+          gh release upload $tag @files --repo $env:GH_REPO --clobber
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
