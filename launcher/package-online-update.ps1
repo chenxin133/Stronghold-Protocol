@@ -25,7 +25,12 @@ try {
       if ($null -eq $archive.GetEntry("Stronghold-PWA-Server/$name")) { throw "Missing update file: $name" }
     }
   } finally { $archive.Dispose() }
-  $checksum = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + [IO.Path]::GetFileName($zip) + "`n"
+  $hash = [Security.Cryptography.SHA256]::Create()
+  $stream = [IO.File]::OpenRead($zip)
+  try {
+    $digest = [BitConverter]::ToString($hash.ComputeHash($stream)).Replace('-', '').ToLowerInvariant()
+  } finally { $stream.Dispose(); $hash.Dispose() }
+  $checksum = $digest + '  ' + [IO.Path]::GetFileName($zip) + "`n"
   [IO.File]::WriteAllText($zip + '.sha256', $checksum)
   Write-Output $zip
   Write-Output $checksum.Trim()
