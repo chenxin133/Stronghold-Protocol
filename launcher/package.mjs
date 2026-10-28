@@ -1,4 +1,4 @@
-// One-time Windows bootstrap package; game releases are fetched at runtime, without rebuilding this ZIP.
+// Complete Windows package; later game releases are fetched without rebuilding this ZIP.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -66,10 +66,12 @@ const bundled = await bundleGame(path.join(stage, 'launcher'), temp, config);
 await smokeOfflineGame(path.join(stage, 'launcher'), path.join(stage, 'node/node.exe'), bundled, config);
 await fs.writeFile(path.join(stage, 'BUNDLE.json'), `${JSON.stringify({ launcher: version, connecttool: pin.version, game: bundled.metadata.tag, offlineGame: true }, null, 2)}\n`);
 const zip = path.join(out, `Stronghold-PWA-Server-${version}-Windows-x64.zip`);
+console.log('Creating full Windows ZIP...');
 execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-  "$ErrorActionPreference = 'Stop'; Compress-Archive -LiteralPath $env:SP_PWA_STAGE -DestinationPath $env:SP_PWA_ZIP -CompressionLevel Optimal"],
+  "$ErrorActionPreference = 'Stop'; Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::CreateFromDirectory($env:SP_PWA_STAGE, $env:SP_PWA_ZIP, [System.IO.Compression.CompressionLevel]::Fastest, $true)"],
 { env: { ...process.env, SP_PWA_STAGE: stage, SP_PWA_ZIP: zip }, stdio: 'inherit', windowsHide: true });
-// Compress-Archive must include the dot-prefixed runtime. Verify the result, not just the staging directory.
+console.log('ZIP created; checking bundled runtime, game, image and ConnectTool entries...');
+// Verify the actual ZIP includes the dot-prefixed runtime, not just the staging directory.
 execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `
   $ErrorActionPreference = 'Stop'
   Add-Type -AssemblyName System.IO.Compression.FileSystem
