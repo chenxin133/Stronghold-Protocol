@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { fork, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { repository, validateConfig, githubClient, liteAsset, downloadAsset, extractGame, copyInstalledGame, canRestart, atomicJson, readJson } from './lib.mjs';
+import { findLocalGame, importLocalGame } from './local-game.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const configArgument = process.argv.indexOf('--config');
@@ -59,9 +60,16 @@ async function linkAssets(game) {
     ? path.resolve(path.dirname(configFile), config.assetPublicDirectory)
     : path.join(stateDir, 'shared/public');
   for (const name of ['assets', 'fonts']) {
+    const link = path.join(game, 'public', name);
+    const existing = await fs.lstat(link).catch((error) => { if (error.code !== 'ENOENT') throw error; return null; });
+    if (existing) {
+      if (!existing.isDirectory() && !existing.isSymbolicLink()) throw new Error(`Invalid game asset directory: ${link}`);
+      continue;
+    }
     const target = path.join(publicDir, name);
     await fs.mkdir(target, { recursive: true });
-    await fs.symlink(target, path.join(game, 'public', name), process.platform === 'win32' ? 'junction' : 'dir');
+    await fs.mkdir(path.dirname(link), { recursive: true });
+    await fs.symlink(target, link, process.platform === 'win32' ? 'junction' : 'dir');
   }
   // Optional extracted art is version-specific; import its manifests only from a matching installation.
   if (config.assetPublicDirectory) {
@@ -120,6 +128,7 @@ async function prepare(release) {
 
 async function startGame(installed) {
   if (stopped) return;
+  await linkAssets(installed.game);
   await fs.cp(path.join(HERE, 'web'), path.join(installed.game, 'public/subscriptions'), { recursive: true });
   const plugins = path.join(stateDir, 'shared/plugins');
   await fs.mkdir(plugins, { recursive: true });
@@ -210,7 +219,8 @@ async function checkUpdates() {
         return { repository: repo, kind: item.kind, version: entry.tag_name || entry.sha?.slice(0, 12), url: entry.html_url, feed };
       } catch (error) { return { repository: repo, kind: item.kind, url, error: error.message }; }
     }));
-    if (current && current.key !== `${release.id}-${asset.id}`) {
+    const sameLocalVersion = current?.provenance === 'verified-local-installation-manifest' && current.tag === release.tag_name;
+    if (current && current.key !== `${release.id}-${asset.id}` && !sameLocalVersion) {
       pending = release;
       status.phase = 'waiting-for-match';
       console.log(`[update] ${release.tag_name} available; waiting for an idle server.`);
@@ -245,9 +255,18 @@ try {
     if (metadata?.repository === source) current = { ...metadata, game: path.join(stateDir, 'versions', pointer.key, 'Stronghold-Protocol') };
   }
   if (!current) {
-    const release = await api(`/repos/${source}/releases/latest`);
-    current = await prepare(release);
+    const local = await findLocalGame(config, configFile, HERE);
+    if (local) {
+      console.log(`[startup] Importing local game from ${local}; verifying the release manifest (no download).`);
+      current = await importLocalGame(local, stateDir, source);
+    } else {
+      console.log('[startup] No bundled or local game found. Downloading the first installation; keep this window open.');
+      const release = await api(`/repos/${source}/releases/latest`);
+      current = await prepare(release);
+    }
   }
+  if (!config.assetPublicDirectory && current.localAssetPublicDirectory) config.assetPublicDirectory = current.localAssetPublicDirectory;
+  console.log(`[startup] Starting installed game ${current.tag}...`);
   await startGame(current);
   console.log(`\nPWA: http://localhost:${config.port}/`);
   console.log(`Subscriptions: http://localhost:${config.port}/subscriptions/`);

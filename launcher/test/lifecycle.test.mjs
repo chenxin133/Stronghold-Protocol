@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import http from 'node:http';
+import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -20,14 +21,14 @@ async function waitFor(read, description) {
   throw new Error(`Timed out: ${description}`);
 }
 
-async function fixture(t, { matches = 0, failNext = false, offline = false } = {}) {
+async function fixture(t, { matches = 0, failNext = false, offline = false, manual = false } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'stronghold-pwa-lifecycle-'));
   const reserve = http.createServer();
   reserve.listen(0, '127.0.0.1');
   await once(reserve, 'listening');
   const port = reserve.address().port;
   await new Promise((resolve) => reserve.close(resolve));
-  for (const name of ['server.mjs', 'game-child.mjs', 'lib.mjs', 'web', 'package.json']) await fs.cp(path.join(launcher, name), path.join(root, name), { recursive: true });
+  for (const name of ['server.mjs', 'game-child.mjs', 'lib.mjs', 'local-game.mjs', 'web', 'package.json']) await fs.cp(path.join(launcher, name), path.join(root, name), { recursive: true });
   await fs.symlink(path.join(launcher, 'node_modules'), path.join(root, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
   const runtime = path.join(root, '.runtime');
   const control = path.join(root, 'control.json');
@@ -57,8 +58,26 @@ async function fixture(t, { matches = 0, failNext = false, offline = false } = {
     await fs.writeFile(path.join(version, 'ready.json'), JSON.stringify({ key: `${id}-${id}`, repository: 'example/game', tag: `v${id}` }));
   }
   await fs.writeFile(path.join(runtime, 'current.json'), '{"key":"1-1"}');
+  let seedInstallation;
+  if (manual) {
+    seedInstallation = path.join(root, 'manual-game');
+    const contents = {
+      'server/index.js': stubServer,
+      'package.json': JSON.stringify({ type: 'module', name: 'stronghold-protocol-alliance', version: '1' }),
+      'spec.json': JSON.stringify({ tag: 'v1', fail: false }),
+    };
+    const manifest = { format: 1, app: '1', files: {} };
+    for (const [name, content] of Object.entries(contents)) {
+      await fs.mkdir(path.dirname(path.join(seedInstallation, name)), { recursive: true });
+      await fs.writeFile(path.join(seedInstallation, name), content);
+      manifest.files[name] = { size: Buffer.byteLength(content), sha256: crypto.createHash('sha256').update(content).digest('hex') };
+    }
+    await fs.writeFile(path.join(seedInstallation, 'MANIFEST.json'), JSON.stringify(manifest));
+    await fs.unlink(path.join(runtime, 'current.json'));
+  }
   await fs.writeFile(path.join(root, 'config.json'), JSON.stringify({
     source: 'https://github.com/example/game', port, host: '127.0.0.1', checkIntervalMinutes: 5, assetPublicDirectory: '', subscriptions: [],
+    ...(seedInstallation ? { seedInstallation } : {}),
   }));
   const mock = path.join(root, 'mock-network.mjs');
   await fs.writeFile(mock, `
@@ -126,4 +145,13 @@ test('a GitHub outage does not prevent starting the installed game', { timeout: 
   await waitFor(() => f.output().includes('keeping the installed game'), 'remote check fails');
   assert.equal(await f.game(), 'v1');
   assert.match((await f.status(1)).error, /GitHub outage/);
+});
+
+test('a manually downloaded game boots on a fresh installation before any GitHub request succeeds', { timeout: 30_000 }, async (t) => {
+  const f = await fixture(t, { offline: true, manual: true });
+  await waitFor(() => f.output().includes('keeping the installed game'), 'offline update check follows local boot');
+  assert.equal(await f.game(), 'v1');
+  assert.ok(f.output().includes('Importing local game'));
+  assert.ok(!f.output().includes('[update] Preparing'));
+  assert.match(JSON.parse(await fs.readFile(path.join(f.runtime, 'current.json'))).key, /^0-\d+$/);
 });

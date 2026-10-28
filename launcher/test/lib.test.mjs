@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { repository, validateConfig, githubClient, liteAsset, safeZipEntry, downloadAsset, copyInstalledGame, canRestart, atomicJson, readJson } from '../lib.mjs';
+import { repository, validateConfig, githubClient, liteAsset, fullAsset, safeZipEntry, downloadAsset, copyInstalledGame, canRestart, atomicJson, readJson } from '../lib.mjs';
 
 const validAsset = {
   id: 20, name: 'Stronghold-Protocol-v0.3.3-lite.zip', size: 4,
@@ -38,6 +38,13 @@ test('ZIP traversal, drive paths, backslashes and symlinks are rejected', () => 
     assert.throws(() => safeZipEntry({ fileName, externalFileAttributes: 0 }));
   }
   assert.throws(() => safeZipEntry({ fileName: 'link', externalFileAttributes: 0xa000 << 16 }));
+});
+
+test('the full game selector excludes update/lite ZIPs and allows the complete asset package', () => {
+  const full = { ...validAsset, id: 21, name: 'Stronghold-Protocol-v0.3.3.zip', size: 861090941 };
+  assert.equal(fullAsset({ ...release, assets: [validAsset, { ...validAsset, name: 'Stronghold-Protocol-v0.3.3-update.zip' }, full] }), full);
+  assert.throws(() => fullAsset(release), /full ZIP/);
+  assert.throws(() => fullAsset({ ...release, assets: [{ ...full, size: 3 * 1024 ** 3 }] }), /full ZIP/);
 });
 
 test('a server only restarts with an explicit zero active-match count', () => {
@@ -90,8 +97,10 @@ test('an existing installation is copied only after its version and every manife
   const expected = { size: Buffer.byteLength(content), sha256: crypto.createHash('sha256').update(content).digest('hex') };
   await fs.writeFile(path.join(source, 'package.json'), content);
   await atomicJson(path.join(source, 'MANIFEST.json'), { format: 1, app: '0.3.3', files: { 'package.json': expected } });
+  await atomicJson(path.join(source, 'data/assets.json'), { chars: { fixture: {} } });
   await copyInstalledGame(source, path.join(dir, 'good'), 'v0.3.3');
   assert.equal(await fs.readFile(path.join(dir, 'good/package.json'), 'utf8'), content);
+  assert.deepEqual(await readJson(path.join(dir, 'good/data/assets.json')), { chars: { fixture: {} } });
   await assert.rejects(() => copyInstalledGame(source, path.join(dir, 'wrong-version'), 'v0.4.0'), /does not match/);
   await fs.writeFile(path.join(source, 'package.json'), '{"version":"0.3.3","changed":true}');
   await assert.rejects(() => copyInstalledGame(source, path.join(dir, 'changed'), 'v0.3.3'), /file changed/);

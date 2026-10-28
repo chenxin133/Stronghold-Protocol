@@ -54,19 +54,25 @@ export function githubClient(fetchFn = fetch, token = process.env.GITHUB_TOKEN) 
   };
 }
 
-export function liteAsset(release) {
+function gameAsset(release, kind) {
   if (!Number.isSafeInteger(release.id) || release.id <= 0 || release.draft || release.prerelease || typeof release.tag_name !== 'string') {
     throw new Error('Expected a stable GitHub release');
   }
-  const asset = release.assets?.find((a) => /^Stronghold-Protocol-v.+-lite\.zip$/.test(a.name));
-  if (!asset || !Number.isSafeInteger(asset.id) || !Number.isSafeInteger(asset.size) || asset.size <= 0 || asset.size > 512 * 1024 * 1024) {
-    throw new Error('This release has no supported Stronghold-Protocol lite ZIP');
+  const asset = release.assets?.find((a) => kind === 'full'
+    ? a.name === `Stronghold-Protocol-${release.tag_name}.zip`
+    : /^Stronghold-Protocol-v.+-lite\.zip$/.test(a.name));
+  const maxSize = (kind === 'full' ? 2048 : 512) * 1024 * 1024;
+  if (!asset || !Number.isSafeInteger(asset.id) || !Number.isSafeInteger(asset.size) || asset.size <= 0 || asset.size > maxSize) {
+    throw new Error(`This release has no supported Stronghold-Protocol ${kind} ZIP`);
   }
   const url = new URL(asset.browser_download_url);
   if (url.protocol !== 'https:' || url.hostname !== 'github.com' || url.username || url.password || url.port) throw new Error('Invalid release download URL');
   if (asset.digest && !/^sha256:[a-f0-9]{64}$/i.test(asset.digest)) throw new Error('Unsupported release digest');
   return asset;
 }
+
+export function liteAsset(release) { return gameAsset(release, 'lite'); }
+export function fullAsset(release) { return gameAsset(release, 'full'); }
 
 export function safeZipEntry(entry) {
   const name = entry.fileName;
@@ -129,6 +135,16 @@ export async function copyInstalledGame(installation, destination, tag) {
     await fs.mkdir(path.dirname(target), { recursive: true });
     await fs.copyFile(path.join(installation, name), target);
   }
+  // Art manifests are deliberately excluded from upstream MANIFEST.json, but the browser still needs them.
+  for (const name of ['data/assets.json', 'data/local-assets.json', 'data/local-fx.json']) {
+    const source = path.join(installation, name);
+    try {
+      await readJson(source);
+      await fs.mkdir(path.dirname(path.join(destination, name)), { recursive: true });
+      await fs.copyFile(source, path.join(destination, name));
+    } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
+  await fs.copyFile(manifestFile, path.join(destination, 'MANIFEST.json'));
   return sha256(manifestFile);
 }
 

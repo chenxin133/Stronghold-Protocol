@@ -60,7 +60,7 @@ English summary: [below](#english).
 
 ## 快速开始
 
-**本 fork 的 Windows/PWA 联机整合包**：见 [安装、ConnectTool 联机与 GitHub 自动更新](docs/PWA-SUBSCRIPTIONS.md)。启动器 1.1.0 起内置 ConnectTool v1.6.0 及运行库，提供开服/加入入口；游戏更新无需重新运行 Actions 或重新安装客户端。
+**本 fork 的 Windows/PWA 联机整合包**：见 [安装、ConnectTool 联机与 GitHub 自动更新](docs/PWA-SUBSCRIPTIONS.md)。1.2.0 起内置完整游戏、素材、Node.js 和 ConnectTool v1.6.0，解压即可开服；也支持手动游戏目录，后续更新无需重新运行 Actions。
 
 ### 方式一：整合包（推荐）
 

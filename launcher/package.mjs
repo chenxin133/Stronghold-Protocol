@@ -7,6 +7,8 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import extract from 'extract-zip';
 import { sha256, safeZipEntry, readJson, downloadAsset } from './lib.mjs';
 import { bundleConnectTool, connectToolRoot } from './connecttool.mjs';
+import { bundleGame } from './bundle-game.mjs';
+import { smokeOfflineGame } from './package-smoke.mjs';
 
 if (process.platform !== 'win32') throw new Error('Build the Windows bootstrap ZIP on Windows (or use the GitHub workflow).');
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -30,7 +32,7 @@ await fs.mkdir(path.join(stage, 'node'), { recursive: true });
 await fs.mkdir(path.join(stage, 'launcher'), { recursive: true });
 await fs.copyFile(path.join(temp, nodeFolder, 'node.exe'), path.join(stage, 'node/node.exe'));
 await fs.copyFile(path.join(temp, nodeFolder, 'LICENSE'), path.join(stage, 'node/LICENSE-node.txt'));
-for (const name of ['package.json', 'package-lock.json', 'config.json', 'server.mjs', 'game-child.mjs', 'lib.mjs', 'online.mjs', 'Start-PWA.cmd', 'Start-Online.cmd', 'connecttool.json', 'web', 'node_modules']) {
+for (const name of ['package.json', 'package-lock.json', 'config.json', 'server.mjs', 'game-child.mjs', 'lib.mjs', 'local-game.mjs', 'online.mjs', 'Start-PWA.cmd', 'Start-Online.cmd', 'connecttool.json', 'web', 'node_modules']) {
   await fs.cp(path.join(here, name), path.join(stage, 'launcher', name), { recursive: true });
 }
 for (const name of ['LICENSE', 'NOTICE.md', 'THIRD-PARTY-NOTICES.md']) await fs.copyFile(path.join(here, '..', name), path.join(stage, name));
@@ -59,10 +61,30 @@ const smoke = spawnSync(path.join(smokeDirectory, 'connecttool-qt.exe'), ['--sof
 });
 if (smoke.error || smoke.status !== 0) throw new Error(`Bundled ConnectTool failed its QML smoke test: ${smoke.error?.message || smoke.stderr || smoke.status}`);
 console.log(`Bundled ConnectTool ${pin.version}: SHA-256 and QML smoke test passed.`);
+const config = await readJson(path.join(here, 'config.json'));
+const bundled = await bundleGame(path.join(stage, 'launcher'), temp, config);
+await smokeOfflineGame(path.join(stage, 'launcher'), path.join(stage, 'node/node.exe'), bundled, config);
+await fs.writeFile(path.join(stage, 'BUNDLE.json'), `${JSON.stringify({ launcher: version, connecttool: pin.version, game: bundled.metadata.tag, offlineGame: true }, null, 2)}\n`);
 const zip = path.join(out, `Stronghold-PWA-Server-${version}-Windows-x64.zip`);
 execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
   "$ErrorActionPreference = 'Stop'; Compress-Archive -LiteralPath $env:SP_PWA_STAGE -DestinationPath $env:SP_PWA_ZIP -CompressionLevel Optimal"],
 { env: { ...process.env, SP_PWA_STAGE: stage, SP_PWA_ZIP: zip }, stdio: 'inherit', windowsHide: true });
+// Compress-Archive must include the dot-prefixed runtime. Verify the result, not just the staging directory.
+execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `
+  $ErrorActionPreference = 'Stop'
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  $archive = [System.IO.Compression.ZipFile]::OpenRead($env:SP_PWA_ZIP)
+  try {
+    foreach ($required in ($env:SP_PWA_REQUIRED | ConvertFrom-Json)) {
+      if ($null -eq $archive.GetEntry($required)) { throw "Missing bundled file: $required" }
+    }
+  } finally { $archive.Dispose() }
+`], { env: { ...process.env, SP_PWA_ZIP: zip, SP_PWA_REQUIRED: JSON.stringify([
+  'Stronghold-PWA-Server/launcher/.runtime/current.json',
+  `Stronghold-PWA-Server/launcher/.runtime/versions/${bundled.metadata.key}/Stronghold-Protocol/server/index.js`,
+  `Stronghold-PWA-Server/launcher/.runtime/shared/public/assets/${bundled.image}`,
+  'Stronghold-PWA-Server/connecttool/connecttool-qt.exe',
+]) }, stdio: 'inherit', windowsHide: true });
 const checksum = `${await sha256(zip)}  ${path.basename(zip)}\n`;
 await fs.writeFile(`${zip}.sha256`, checksum);
 console.log(zip);

@@ -107,6 +107,7 @@ async function main() {
     ? '房主：房间 ID 留空，创建房间，再把 ID 发给朋友。 / Host: leave room ID empty and create a room.'
     : '加入者：在 ConnectTool 输入房主的房间 ID，然后加入。 / Guest: enter the host room ID in ConnectTool.');
   console.log(`连通后自动打开 / Opens when connected: ${plan.url}\n游戏同盟密钥与 ConnectTool 房间 ID 不同。 / The game alliance key is separate from the ConnectTool room ID.\n`);
+  if (mode === 'host') console.log('正在启动本机游戏服务器，准备好后自动打开游戏；请保留此窗口。 / Starting the local game; keep this window open.');
   const controller = new AbortController();
   let server;
   process.on('SIGINT', () => { controller.abort(); server?.kill(); });
