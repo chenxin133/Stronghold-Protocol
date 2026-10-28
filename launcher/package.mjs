@@ -40,7 +40,7 @@ await fs.copyFile(path.join(here, '../docs/PWA-SUBSCRIPTIONS.md'), path.join(sta
 await fs.writeFile(path.join(stage, 'Start-PWA.cmd'), '@echo off\r\ncall "%~dp0launcher\\Start-PWA.cmd" %*\r\n');
 await fs.writeFile(path.join(stage, 'Start-Online.cmd'), '@echo off\r\ncall "%~dp0launcher\\Start-Online.cmd" %*\r\n');
 await fs.writeFile(path.join(stage, 'Host-Game.cmd'), '@echo off\r\ncall "%~dp0launcher\\Start-Online.cmd" --host %*\r\n');
-await fs.writeFile(path.join(stage, 'Join-Game.cmd'), '@echo off\r\ncall "%~dp0launcher\\Start-Online.cmd" --join %*\r\n');
+await fs.copyFile(path.join(here, '../Join-Game.cmd'), path.join(stage, 'Join-Game.cmd'));
 const pin = await readJson(path.join(here, 'connecttool.json'));
 const toolIndex = process.argv.indexOf('--connecttool-zip');
 let toolZip;
@@ -91,5 +91,6 @@ const checksum = `${await sha256(zip)}  ${path.basename(zip)}\n`;
 await fs.writeFile(`${zip}.sha256`, checksum);
 console.log(zip);
 console.log(checksum.trim());
+execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', path.join(here, 'package-online-update.ps1'), '-OutDirectory', out], { stdio: 'inherit', windowsHide: true });
 // This directory was just created by mkdtemp and is never supplied by the user.
 await fs.rm(temp, { recursive: true, force: true });

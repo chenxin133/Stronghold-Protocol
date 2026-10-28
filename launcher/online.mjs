@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+import { isIPv4 } from 'node:net';
 import { createInterface } from 'node:readline/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { readJson, validateConfig } from './lib.mjs';
@@ -10,14 +11,19 @@ import { readJson, validateConfig } from './lib.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const JOIN_PORT = 3001;
 
-export function onlinePlan(mode, config, configFile, toolFile = path.join(HERE, '../connecttool/connecttool-qt.exe')) {
+export function onlinePlan(mode, config, configFile, toolFile = path.join(HERE, '../connecttool/connecttool-qt.exe'), { network = 'tcp', hostIp } = {}) {
   if (!['host', 'join'].includes(mode)) throw new Error('Choose host or join');
+  if (!['tun', 'tcp'].includes(network)) throw new Error('Choose network tun or tcp');
   validateConfig(config);
-  if (mode === 'host' && config.port === JOIN_PORT) throw new Error('Game port 3001 conflicts with ConnectTool; use another game port');
+  if (mode === 'host' && network === 'tcp' && config.port === JOIN_PORT) throw new Error('Game port 3001 conflicts with ConnectTool; use another game port');
+  if (mode === 'join' && network === 'tun' && (!isIPv4(hostIp || '') || hostIp === '0.0.0.0' || hostIp.startsWith('127.'))) {
+    throw new Error('请输入房主在 ConnectTool 显示的虚拟 IPv4 地址，例如 10.x.x.x。 / Enter the host virtual IPv4 address.');
+  }
   return {
-    mode, toolFile: path.resolve(toolFile), toolArgs: [],
-    targetPort: config.port, listenPort: JOIN_PORT,
-    url: `http://localhost:${mode === 'host' ? config.port : JOIN_PORT}/`,
+    mode, network, toolFile: path.resolve(toolFile), toolArgs: [],
+    targetPort: config.port, listenPort: network === 'tcp' ? JOIN_PORT : null,
+    url: mode === 'host' ? `http://localhost:${config.port}/`
+      : network === 'tun' ? `http://${hostIp}:${config.port}/` : `http://localhost:${JOIN_PORT}/`,
     serverArgs: mode === 'host' ? [path.join(HERE, 'server.mjs'), '--config', path.resolve(configFile)] : null,
   };
 }
@@ -36,7 +42,7 @@ export async function waitForGame(url, { fetchFn = fetch, sleep = delay, attempt
     if (await gameReady(url, fetchFn)) return;
     if (attempt + 1 < attempts) await sleep(1000, undefined, { signal });
   }
-  throw new Error('Game is not reachable yet. Check the ConnectTool room and TCP ports, then open the printed URL.');
+  throw new Error('Game is not reachable yet. Check the ConnectTool mode, host address and game port, then open the printed URL.');
 }
 
 async function openGame(url) {
@@ -93,19 +99,36 @@ async function main() {
   const configFile = path.resolve(value('--config', path.join(HERE, 'config.json')));
   const config = await readJson(configFile);
   let mode = args.includes('--host') ? 'host' : args.includes('--join') ? 'join' : null;
-  if (!mode) {
-    const input = createInterface({ input: process.stdin, output: process.stdout });
-    const choice = await input.question('1. 开服 / Host    2. 加入 / Join\n选择 / Choose [1]: ');
+  let network = value('--network', null);
+  let hostIp = value('--host-ip', null);
+  const input = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    if (!mode) {
+      const choice = (await input.question('1. 开服 / Host    2. 加入 / Join\n选择 / Choose [1]: ')).trim();
+      mode = !choice || choice === '1' ? 'host' : choice === '2' ? 'join' : null;
+    }
+    if (!network) {
+      const choice = (await input.question('1. 虚拟网卡组网 / TUN    2. TCP 转发 / TCP forwarding\n选择 / Choose [1]: ')).trim();
+      network = !choice || choice === '1' ? 'tun' : choice === '2' ? 'tcp' : null;
+    }
+    if (mode === 'join' && network === 'tun' && !hostIp) {
+      hostIp = (await input.question('房主在 ConnectTool 显示的虚拟 IPv4（不是加入者自己的 IP） / Host virtual IPv4: ')).trim();
+    }
+  } finally {
     input.close();
-    mode = !choice || choice.trim() === '1' ? 'host' : choice.trim() === '2' ? 'join' : null;
   }
-  const plan = onlinePlan(mode, config, configFile, value('--connecttool', undefined));
+  const plan = onlinePlan(mode, config, configFile, value('--connecttool', undefined), { network, hostIp });
   await fs.access(plan.toolFile);
   console.log('\n请先登录 Steam。ConnectTool 已随本包提供。 / Sign in to Steam first.\n');
-  console.log(`ConnectTool: TCP 转发 / TCP forwarding; 主机目标端口 / target: ${plan.targetPort}; 本地监听端口 / listen: ${plan.listenPort}`);
+  console.log(network === 'tun'
+    ? `ConnectTool: 选择虚拟网卡 / TUN 模式；游戏端口 / game port: ${plan.targetPort}`
+    : `ConnectTool: TCP 转发 / TCP forwarding; 主机目标端口 / target: ${plan.targetPort}; 本地监听端口 / listen: ${plan.listenPort}`);
   console.log(mode === 'host'
     ? '房主：房间 ID 留空，创建房间，再把 ID 发给朋友。 / Host: leave room ID empty and create a room.'
     : '加入者：在 ConnectTool 输入房主的房间 ID，然后加入。 / Guest: enter the host room ID in ConnectTool.');
+  if (network === 'tun') console.log(mode === 'host'
+    ? '组网后把 ConnectTool 显示的本机虚拟 IP 发给朋友，朋友从该 IP 进入游戏。 / Share your virtual IP after connecting.'
+    : `正在连接房主 / Connecting to host: ${plan.url}\n加入者只连接房主，不启动本机游戏服务器。 / A guest does not start a local game server.`);
   console.log(`连通后自动打开 / Opens when connected: ${plan.url}\n游戏同盟密钥与 ConnectTool 房间 ID 不同。 / The game alliance key is separate from the ConnectTool room ID.\n`);
   if (mode === 'host') console.log('正在启动本机游戏服务器，准备好后自动打开游戏；请保留此窗口。 / Starting the local game; keep this window open.');
   const controller = new AbortController();

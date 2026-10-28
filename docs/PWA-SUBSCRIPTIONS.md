@@ -9,7 +9,7 @@
 ## 使用方式
 
 1. 从本 fork 的 Releases 下载 `Stronghold-PWA-Server-<版本>-Windows-x64.zip`，解压到路径较短的位置。
-2. Windows 双击包内 `Start-Online.cmd`，选择 **1 开服** 或 **2 加入**，也可以分别使用 `Host-Game.cmd` / `Join-Game.cmd`。开服启动 ConnectTool 与游戏服务器，加入端启动 ConnectTool 并等待转发连通，之后自动打开游戏窗口。无需 Steam 联机时使用 `Start-PWA.cmd`。内置 Node.js，不需要 Git、npm、Android Studio 或 Apple 开发者账号。1.2.0 完整包无需首次下载游戏或素材，即使 GitHub 无法访问也能启动。
+2. Windows 双击包内 `Start-Online.cmd`，选择 **1 开服** 或 **2 加入**，也可以分别使用 `Host-Game.cmd` / `Join-Game.cmd`。1.2.1 起再选择 **1 虚拟网卡组网（默认）** 或 **2 TCP 转发**；虚拟网卡加入端输入房主在 ConnectTool 显示的虚拟 IPv4，连通后自动打开房主的游戏地址。开服启动 ConnectTool 与游戏服务器，加入端只启动 ConnectTool。无需 Steam 联机时使用 `Start-PWA.cmd`。内置 Node.js，不需要 Git、npm、Android Studio 或 Apple 开发者账号。1.2.0 起的完整包无需首次下载游戏或素材，即使 GitHub 无法访问也能启动。
 3. 电脑打开 `http://localhost:3000/`。控制台同时列出局域网地址，同 Wi-Fi 下的 iPad/Android 可用浏览器访问该地址；首次运行时如有 Windows 防火墙提示，按自己的网络范围允许访问。
 4. 给服务器配置**固定、可信的 HTTPS 地址**后，三端都使用它安装 PWA：Windows Edge/Chrome 的安装按钮；iPad Safari 的分享 → 添加到主屏幕；Android Chrome 的安装应用/添加到主屏幕。不同浏览器和 Android 系统提供的安装形式可能不同。
 5. 打开同一地址的 `/subscriptions/` 查看当前/最新版本、更新状态及各仓库 RSS/Atom 链接。页面不提供远程修改服务器配置的接口。
@@ -112,7 +112,22 @@ Caddy 需要能够完成该域名的证书验证，且三端都能访问这个�
 使用已有的 ConnectTool 时，游戏仍运行在主机 Windows 上，Steam 负责电脑之间的连接或中继，并非替你托管游戏。
 
 1.1.0 起，ConnectTool 已随整合包提供，无需另行安装。`Start-Online.cmd` 会启动包内的程序；房主还会启动本包的游戏服务器，若对应端口已有本游戏服务器则直接复用。加入者不启动第二个游戏服务器。Edge 可用时，连通后以应用窗口打开游戏；否则使用默认浏览器。
-Steam 登录、TCP 端口以及房间创建/加入需在 ConnectTool 自身窗口里完成。官方 v1.6.0 未提供这些房间操作的命令行参数，启动器不会冒充已经创建了房间。
+Steam 登录、模式选择以及房间创建/加入需在 ConnectTool 自身窗口里完成。官方 v1.6.0 未提供这些房间操作的命令行参数，启动器会等待游戏地址可达。启动器选择的模式和 ConnectTool 窗口中的模式必须一致。
+
+### 虚拟网卡 / TUN 模式（1.2.1 默认）
+
+1. 房主运行 `Host-Game.cmd`，加入者运行 `Join-Game.cmd`，双方选择 **1 虚拟网卡组网**。
+2. 在 ConnectTool 中选择虚拟网卡 / TUN 模式，房主创建房间，加入者通过 ConnectTool 房间 ID 加入。
+3. 房主把 ConnectTool 显示的**本机虚拟 IPv4** 发给加入者。加入者在启动器提示中输入这个 IP；例如房主是 `10.20.30.40` 时，启动器等待并打开 `http://10.20.30.40:3000/`。IP 会随组网而变化，包内不固定保存任何人的 IP。
+4. 房主在游戏内创建联机房间，把四位同盟密钥发给加入者。加入端只连接房主，不启动自己的游戏服务器。
+
+同盟密钥只在当前游戏服务器内查找。加入者若访问自己的 `localhost:3000` 或自己的虚拟 IP，会进入另一台游戏服务器。房主复制的邀请链接若带 `localhost:3000`，应将地址改成房主虚拟 IP 后再发给朋友。
+
+也可以跳过启动器菜单：`Join-Game.cmd --network tun --host-ip 10.20.30.40`。游戏端口使用 `launcher/config.json` 的 `port`（默认 `3000`），双方应与房主的实际游戏端口保持一致。
+
+### TCP 转发模式
+
+双方在启动器选择 **2 TCP 转发**，或使用 `Host-Game.cmd --network tcp` / `Join-Game.cmd --network tcp`。
 
 1. 两端先登录 Steam。房主双击 `Host-Game.cmd`，参与者双击 `Join-Game.cmd`，两端都会打开随包提供的 ConnectTool。
 2. 两台 Windows 都运行并登录 Steam，再打开 ConnectTool。选择 **TCP 转发**；房主将 **主机目标端口** 设置为 `3000`，房间 ID 留空，创建一个非公开房间。
@@ -121,6 +136,10 @@ Steam 登录、TCP 端口以及房间创建/加入需在 ConnectTool 自身窗�
 5. 参与者在自己的浏览器打开 `http://localhost:3001/`，再用游戏内的四位同盟密钥加入对局。**ConnectTool 房间 ID 与游戏同盟密钥是两件事。** 参与者可以从 Edge/Chrome 将这个 localhost 入口安装为应用。
 
 TCP 转发同时承载本游戏的 HTTP 与 WebSocket；无需 TUN 虚拟网卡，也不需要为此修改全局路由。实际直连/中继质量取决于两端网络；只有第二台电脑加入并加载游戏后，才能确认跨网链路已通。首次加载素材流量较大，可使用游戏原有的导入素材包功能。
+
+### 从 1.2.0 更新联机入口
+
+已安装 1.2.0 完整包时，可下载本 fork 同版本发布页的 `Stronghold-PWA-Server-1.2.1-Online-Update.zip` 小补丁，将其中 `Stronghold-PWA-Server` 文件夹合并到原整合包，覆盖同名文件。补丁更新联机入口与说明，不包含配置、游戏、素材、Node 或 ConnectTool。随后重新运行 `Join-Game.cmd`，即可选择模式并输入房主 IP。
 
 截至本次核查，ConnectTool 官方列出 Windows/Linux/macOS，Android 仍在待开发列表中，没有可直接供 iPad 使用的客户端。其官方说明还提示 Steam 账号使用风险；请自行决定使用哪个账号。[ConnectTool 官方说明](https://github.com/moeleak/connecttool-qt)。
 

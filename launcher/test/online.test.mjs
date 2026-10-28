@@ -41,6 +41,31 @@ test('host uses the configured game port and guest only opens the forwarded port
   assert.throws(() => onlinePlan('other', config, configFile), /Choose/);
 });
 
+test('TUN guests connect to the host virtual IP instead of a local server or TCP forwarding port', async () => {
+  const plan = onlinePlan('join', config, configFile, toolFile, { network: 'tun', hostIp: '10.20.30.40' });
+  assert.equal(plan.url, 'http://10.20.30.40:3000/');
+  assert.equal(plan.serverArgs, null);
+  assert.equal(plan.listenPort, null);
+  const f = spawner();
+  const events = [];
+  await launchOnline(plan, {
+    spawnFn: f.spawnFn, ready: async () => assert.fail('must not check or start a local server'),
+    wait: async (url) => events.push(`ready:${url}`), open: async (url) => events.push(`open:${url}`),
+  });
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.calls[0].executable, toolFile);
+  assert.deepEqual(events, ['ready:http://10.20.30.40:3000/', 'open:http://10.20.30.40:3000/']);
+  assert.equal(onlinePlan('host', { ...config, port: 3001 }, configFile, toolFile, { network: 'tun' }).url, 'http://localhost:3001/');
+  assert.equal(onlinePlan('join', { ...config, port: 4000 }, configFile, toolFile, { network: 'tun', hostIp: '10.20.30.40' }).url, 'http://10.20.30.40:4000/');
+});
+
+test('TUN requires a host virtual IPv4 and refuses loopback addresses', () => {
+  for (const hostIp of [undefined, '', 'localhost', '127.0.0.1', '0.0.0.0', '10.1.2.999', '10.1.2.3/path']) {
+    assert.throws(() => onlinePlan('join', config, configFile, toolFile, { network: 'tun', hostIp }), /IPv4/);
+  }
+  assert.throws(() => onlinePlan('join', config, configFile, toolFile, { network: 'other' }), /network/);
+});
+
 test('host launches bundled ConnectTool with its DLL/AppID working directory, then the server, then the game', async () => {
   const f = spawner();
   const events = [];
